@@ -207,6 +207,13 @@ int main(int argc, char** argv){
     ros::AsyncSpinner async_spinner(1, &callback_queue);
     async_spinner.start();
     
+    std::cout << "Usage: \n";
+    std::cout << "\t W-A-S-D: com position on the XY plane \n";
+    std::cout << "\t T-G: com height (up-down) \n";
+    std::cout << "\t R-F: waist roll (pos-neg) \n";
+    std::cout << "\t P-ò: waist pitch (pos-neg) \n";
+    std::cout << "\t Y-H: waist yaw (pos-neg) \n";
+    
     ros::Rate loop_rate(100);
 
     while(ros::ok()){
