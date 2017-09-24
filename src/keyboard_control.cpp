@@ -61,21 +61,19 @@ int main(int argc, char** argv){
                                              std::ref(R_waist_ref));
     ros::Timer keyboard_timer = nh.createTimer(ros::Duration(.1), keyboard_timer_callback);
     
-    auto _robot = XBot::RobotInterface::getRobot(argv[1]);
     auto _model = XBot::ModelInterface::getModel(argv[1]);
     
-    _robot->sense();
     
     KDL::Tree kdl_tree;
-    kdl_parser::treeFromUrdfModel(_robot->getUrdf(), kdl_tree);
+    kdl_parser::treeFromUrdfModel(_model->getUrdf(), kdl_tree);
 
     robot_state_publisher::RobotStatePublisher rspub(kdl_tree);
 
-    std::string _urdf_param_name = "/xbotcore/" + _robot->getUrdf().getName() + "/robot_description";
-    std::string _tf_prefix = "/xbotcore/" + _robot->getUrdf().getName();
-    nh.setParam(_urdf_param_name, _robot->getUrdfString());
+    std::string _urdf_param_name = "/xbotcore/" + _model->getUrdf().getName() + "/robot_description";
+    std::string _tf_prefix = "/xbotcore/" + _model->getUrdf().getName();
+    nh.setParam(_urdf_param_name, _model->getUrdfString());
     
-    int _num_feet = _robot->legs();
+    int _num_feet = _model->legs();
     std::vector<std::string> _feet_links = {"foot_fl", "foot_fr", "foot_hr", "foot_hl"};
 
     Eigen::MatrixXd _contact_matrix;
@@ -93,11 +91,7 @@ int main(int argc, char** argv){
     _model->setJointPosition(_qhome);
     _model->update();
     
-    _robot->setReferenceFrom(*_model, XBot::Sync::Position);
-    _robot->move();
-    
-    ros::Duration(1.0).sleep();
- 
+   
     
     
     std::vector<ContactTask::Ptr> _contact_tasks;
@@ -258,10 +252,7 @@ int main(int argc, char** argv){
        _model->setJointPosition(_q);
        _model->update();
        
-       /* Send config to robot */
-       _robot->setReferenceFrom(*_model, XBot::Sync::Position);
-       _robot->move();
-       
+
        /* Publish TF */
        _model->getJointPosition(_joint_name_map);
         std::map<std::string, double> _joint_name_std_map(_joint_name_map.begin(), _joint_name_map.end());
