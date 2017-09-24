@@ -2,6 +2,7 @@
 #include <ros/callback_queue.h>
 #include <tf/transform_broadcaster.h>
 #include <tf_conversions/tf_eigen.h>
+#include <robot_state_publisher/robot_state_publisher.h>
 
 #include <boost/make_shared.hpp>
 
@@ -64,6 +65,15 @@ int main(int argc, char** argv){
     auto _model = XBot::ModelInterface::getModel(argv[1]);
     
     _robot->sense();
+    
+    KDL::Tree kdl_tree;
+    kdl_parser::treeFromUrdfModel(_robot->getUrdf(), kdl_tree);
+
+    robot_state_publisher::RobotStatePublisher rspub(kdl_tree);
+
+    std::string _urdf_param_name = "/xbotcore/" + _robot->getUrdf().getName() + "/robot_description";
+    std::string _tf_prefix = "/xbotcore/" + _robot->getUrdf().getName();
+    nh.setParam(_urdf_param_name, _robot->getUrdfString());
     
     int _num_feet = _robot->legs();
     std::vector<std::string> _feet_links = {"foot_fl", "foot_fr", "foot_hr", "foot_hl"};
@@ -215,6 +225,8 @@ int main(int argc, char** argv){
     std::cout << "\t Y-H: waist yaw (pos-neg) \n";
     
     ros::Rate loop_rate(100);
+    
+    XBot::JointNameMap _joint_name_map;
 
     while(ros::ok()){
         
@@ -249,6 +261,13 @@ int main(int argc, char** argv){
        /* Send config to robot */
        _robot->setReferenceFrom(*_model, XBot::Sync::Position);
        _robot->move();
+       
+       /* Publish TF */
+       _model->getJointPosition(_joint_name_map);
+        std::map<std::string, double> _joint_name_std_map(_joint_name_map.begin(), _joint_name_map.end());
+
+        rspub.publishTransforms(_joint_name_std_map, ros::Time::now(), "");
+        rspub.publishFixedTransforms("");
        
        /* Publish floating base pose to TF */
         Eigen::Affine3d w_T_pelvis;

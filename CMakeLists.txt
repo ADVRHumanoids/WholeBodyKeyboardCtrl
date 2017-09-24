@@ -36,7 +36,7 @@ else()
 endif()
 
 # find required packages
-find_package(catkin REQUIRED COMPONENTS tf_conversions roscpp sensor_msgs std_srvs geometry_msgs message_generation eigen_conversions)
+find_package(catkin REQUIRED COMPONENTS  robot_state_publisher tf_conversions roscpp sensor_msgs std_srvs geometry_msgs message_generation eigen_conversions)
 find_package(OpenSoT REQUIRED)
 find_package(XBotInterface REQUIRED)
 
