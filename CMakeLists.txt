@@ -65,9 +65,15 @@ find_package(XBotInterface REQUIRED)
 include_directories(include ${catkin_INCLUDE_DIRS} ${OpenSoT_INCLUDE_DIRS})
 
 add_executable(keyboard_control src/keyboard_control.cpp)
+add_executable(joy_control src/joy_control.cpp)
 
 target_link_libraries(keyboard_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES})
+target_link_libraries(joy_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES})
 
 INSTALL(TARGETS keyboard_control
         EXPORT keyboard_control
+        RUNTIME DESTINATION bin)
+
+INSTALL(TARGETS joy_control
+        EXPORT joy_control
         RUNTIME DESTINATION bin)
