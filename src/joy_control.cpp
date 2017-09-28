@@ -29,6 +29,9 @@ typedef OpenSoT::tasks::velocity::Postural PosturalTask;
 Eigen::VectorXd twist_com_desired;
 Eigen::VectorXd twist_pelvis_desired;
 
+XBot::ModelInterface::Ptr _model;
+ComTask::Ptr _com_task;
+
 double v = 0.5;
 double w = 0.5;
 double dT = 0.01;
@@ -95,7 +98,7 @@ int main(int argc, char *argv[])
 
     ros::Subscriber joystick_feedback = nh.subscribe("/joy", 1000, joy_cb);
 
-    auto _model = XBot::ModelInterface::getModel(argv[1]);
+    _model = XBot::ModelInterface::getModel(argv[1]);
 
     KDL::Tree kdl_tree;
     kdl_parser::treeFromUrdfModel(_model->getUrdf(), kdl_tree);
@@ -127,7 +130,6 @@ int main(int argc, char *argv[])
     std::vector<ContactTask::Ptr> _contact_tasks;
     std::vector<CartesianTask::Ptr> _feet_cartesian_tasks;
     CartesianTask::Ptr _pelvis_cartesian_task, _left_arm_cartesian, _right_arm_cartesian;
-    ComTask::Ptr _com_task;
     PosturalTask::Ptr _postural_task;
 
     OpenSoT::constraints::velocity::JointLimits::Ptr _joint_pos_lims;
@@ -227,7 +229,7 @@ int main(int argc, char *argv[])
 
     _autostack->getStack();
 
-    _solver.reset( new OpenSoT::solvers::QPOases_sot(_autostack->getStack(), _autostack->getBounds(), 1e9) );
+    _solver.reset( new OpenSoT::solvers::QPOases_sot(_autostack->getStack(), _autostack->getBounds(), 1e10) );
 
     _solver->setActiveStack(3, false);
     _solver->setActiveStack(4, false);
