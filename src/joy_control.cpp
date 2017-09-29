@@ -16,6 +16,8 @@
 #include <OpenSoT/SubTask.h>
 #include <OpenSoT/tasks/velocity/Cartesian.h>
 
+#include <OpenSoT/constraints/velocity/CartesianPositionConstraint.h>
+
 #include <XBotInterface/RobotInterface.h>
 #include <XBotInterface/Utils.h>
 
@@ -31,6 +33,10 @@ Eigen::VectorXd twist_pelvis_desired;
 
 XBot::ModelInterface::Ptr _model;
 ComTask::Ptr _com_task;
+OpenSoT::constraints::velocity::CartesianPositionConstraint::Ptr _com_lims;
+Eigen::MatrixXd AComLims(6,3);
+Eigen::VectorXd bComLims(6);
+
 
 double v = 0.5;
 double w = 0.5;
@@ -182,6 +188,13 @@ int main(int argc, char *argv[])
     _com_task = boost::make_shared<ComTask>(_q, *_model);
     //_com_task->setLambda(.02);
     _com_task->setLambda(0.0);
+    AComLims<<Eigen::MatrixXd::Identity(3,3),
+              -1.0*Eigen::MatrixXd::Identity(3,3);
+    std::cout<<AComLims<<std::endl;
+    bComLims<<0.1, 0.1, 0.8, 0.1, 0.1, 0.5;
+    _com_lims.reset(new OpenSoT::constraints::velocity::CartesianPositionConstraint(
+                        _q, _com_task, AComLims, bComLims, 0.1));
+    _com_task->getConstraints().push_back(_com_lims);
 
     _pelvis_cartesian_task = boost::make_shared<CartesianTask>("CARTESIAN_PELVIS",
                                                                 _q,
