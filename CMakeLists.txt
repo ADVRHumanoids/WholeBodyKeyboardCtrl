@@ -36,9 +36,10 @@ else()
 endif()
 
 # find required packages
-find_package(catkin REQUIRED COMPONENTS tf_conversions roscpp sensor_msgs std_srvs geometry_msgs message_generation eigen_conversions)
+find_package(catkin REQUIRED COMPONENTS robot_state_publisher tf_conversions roscpp sensor_msgs std_srvs geometry_msgs message_generation eigen_conversions)
 find_package(OpenSoT REQUIRED)
 find_package(XBotInterface REQUIRED)
+find_package(Boost REQUIRED COMPONENTS program_options filesystem)
 
 
 # message generation
@@ -66,7 +67,7 @@ include_directories(include ${catkin_INCLUDE_DIRS} ${OpenSoT_INCLUDE_DIRS})
 
 add_executable(keyboard_control src/keyboard_control.cpp)
 
-target_link_libraries(keyboard_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES})
+target_link_libraries(keyboard_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES} ${Boost_LIBRARIES})
 
 INSTALL(TARGETS keyboard_control
         EXPORT keyboard_control

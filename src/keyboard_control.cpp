@@ -2,6 +2,7 @@
 #include <ros/callback_queue.h>
 #include <tf/transform_broadcaster.h>
 #include <tf_conversions/tf_eigen.h>
+#include <robot_state_publisher/robot_state_publisher.h>
 
 #include <boost/make_shared.hpp>
 
@@ -20,6 +21,12 @@
 
 #include <mutex>
 #include <functional>
+
+#include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
+
+namespace po = boost::program_options;
+namespace fs = boost::filesystem;
 
 typedef OpenSoT::tasks::velocity::Contact ContactTask;
 typedef OpenSoT::tasks::velocity::Cartesian CartesianTask;
@@ -40,9 +47,39 @@ void keyboard_callback(const ros::TimerEvent& ev,
 
 int main(int argc, char** argv){
     
-    if(argc != 2){
-        std::cout << "Usage: " << argv[0] << " path_to_config_file" << std::endl;
-        return 1;
+    
+    /* Command line parsing */
+    
+    std::string path_to_cfg;
+    bool visual_mode = false;
+    
+    {
+        po::options_description desc("Whole body joystick constrol. Available options:");
+        desc.add_options()
+            ("visual,V","Visual mode does not send references to the robot. \
+                         An internal robot state publisher provides TF for visualization in rviz")
+            ("config,C", "Path to config file")
+        ;
+
+        
+        po::positional_options_description p;
+        p.add("config", -1);
+
+        po::variables_map vm;
+        po::store(po::command_line_parser(argc, argv).
+                options(desc).positional(p).run(), vm);
+        po::notify(vm);
+
+        if (vm.count("config")) {
+            path_to_cfg = fs::absolute(vm["config"].as<std::string>()).string();
+        }
+        else{
+            std::cout << desc << std::endl;
+        }
+        
+        if (vm.count("visual")) {
+            visual_mode = true;
+        }
     }
     
     ros::init(argc, argv, "keyboard_control");
@@ -60,12 +97,31 @@ int main(int argc, char** argv){
                                              std::ref(R_waist_ref));
     ros::Timer keyboard_timer = nh.createTimer(ros::Duration(.1), keyboard_timer_callback);
     
-    auto _robot = XBot::RobotInterface::getRobot(argv[1]);
-    auto _model = XBot::ModelInterface::getModel(argv[1]);
+    XBot::RobotInterface::Ptr _robot;
+    auto _model = XBot::ModelInterface::getModel(path_to_cfg);
     
-    _robot->sense();
+    if(!visual_mode){
+        _robot = XBot::RobotInterface::getRobot(path_to_cfg);
+        _robot->sense();
+    }
+    else{
+        std::string _urdf_param_name = "/xbotcore/" + _model->getUrdf().getName() + "/robot_description";
+        std::string _tf_prefix = "/xbotcore/" + _model->getUrdf().getName();
+        nh.setParam(_urdf_param_name, _model->getUrdfString());
+    }
+
+    KDL::Tree kdl_tree;
+    kdl_parser::treeFromUrdfModel(_model->getUrdf(), kdl_tree);
+    robot_state_publisher::RobotStatePublisher rspub(kdl_tree);
+
     
-    int _num_feet = _robot->legs();
+    
+    
+    
+    
+
+    
+    int _num_feet = _model->legs();
     std::vector<std::string> _feet_links = {"foot_fl", "foot_fr", "foot_hr", "foot_hl"};
 
     Eigen::MatrixXd _contact_matrix;
@@ -83,11 +139,11 @@ int main(int argc, char** argv){
     _model->setJointPosition(_qhome);
     _model->update();
     
-    _robot->setReferenceFrom(*_model, XBot::Sync::Position);
-    _robot->move();
-    
-    ros::Duration(1.0).sleep();
- 
+    if(!visual_mode){
+        _robot->setReferenceFrom(*_model, XBot::Sync::Position);
+        _robot->move();
+        ros::Duration(1.0).sleep();
+    }
     
     
     std::vector<ContactTask::Ptr> _contact_tasks;
@@ -215,6 +271,8 @@ int main(int argc, char** argv){
     std::cout << "\t Y-H: waist yaw (pos-neg) \n";
     
     ros::Rate loop_rate(100);
+    
+    XBot::JointNameMap _joint_name_map;
 
     while(ros::ok()){
         
@@ -246,9 +304,20 @@ int main(int argc, char** argv){
        _model->setJointPosition(_q);
        _model->update();
        
-       /* Send config to robot */
-       _robot->setReferenceFrom(*_model, XBot::Sync::Position);
-       _robot->move();
+       
+       if(!visual_mode){
+           /* Send config to robot */
+        _robot->setReferenceFrom(*_model, XBot::Sync::Position);
+        _robot->move();
+       }
+       else{
+           /* Publish TF */
+            _model->getJointPosition(_joint_name_map);
+            std::map<std::string, double> _joint_name_std_map(_joint_name_map.begin(), _joint_name_map.end());
+            rspub.publishTransforms(_joint_name_std_map, ros::Time::now(), "");
+            rspub.publishFixedTransforms("");
+       }
+       
        
        /* Publish floating base pose to TF */
         Eigen::Affine3d w_T_pelvis;
