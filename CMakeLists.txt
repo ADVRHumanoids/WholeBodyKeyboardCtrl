@@ -66,9 +66,17 @@ find_package(Boost REQUIRED COMPONENTS program_options filesystem)
 include_directories(include ${catkin_INCLUDE_DIRS} ${OpenSoT_INCLUDE_DIRS})
 
 add_executable(keyboard_control src/keyboard_control.cpp)
+# add_executable(joy_control src/joy_control.cpp)
+add_executable(demo_joy_control src/demo_joy_control.cpp)
 
 target_link_libraries(keyboard_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES} ${Boost_LIBRARIES})
+# target_link_libraries(joy_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES})
+target_link_libraries(demo_joy_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES} ${Boost_LIBRARIES})
 
 INSTALL(TARGETS keyboard_control
         EXPORT keyboard_control
+        RUNTIME DESTINATION bin)
+
+INSTALL(TARGETS demo_joy_control
+        EXPORT demo_joy_control
         RUNTIME DESTINATION bin)
