@@ -1,7 +1,7 @@
 #ifndef __ROS_KEYBOARD_H__
 #define __ROS_KEYBOARD_H__
 
-#include <keyboard/Key.h>
+#include <wholebody_keyboard_ctrl/Key.h>
 #include <SDL.h>
 
 namespace keyboard {

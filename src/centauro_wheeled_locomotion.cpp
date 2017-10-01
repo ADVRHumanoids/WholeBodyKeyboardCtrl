@@ -133,7 +133,7 @@ int main(int argc, char** argv){
                                                                      )
                                  );
         
-        icr_tasks[i]->setLambda(.05);
+        icr_tasks[i]->setLambda(.01);
         
         feet_cartesian_tasks.push_back( boost::make_shared<CartesianTask>("CARTESIAN_" + std::to_string(i),
                                                                            qhome,
@@ -247,10 +247,18 @@ int main(int argc, char** argv){
     std::cout << *robot << std::endl;
     
     robot->setReferenceFrom(*model, XBot::Sync::Position);
+    Eigen::VectorXd q, q0, qhome_robot;
+    robot->getJointPosition(q0);
+    robot->getRobotState("home", qhome_robot);
     
-    for(int i = 0; i < 100 ; i++){
+    for(double alpha = 0; alpha < 1.0; alpha += 0.01){
+        
+        q = q0 + 0.5*(1-std::cos(3.1415*(alpha)))*(qhome_robot-q0);
+        robot->setPositionReference(q);
         robot->move();
+        
         ros::Duration(0.01).sleep();
+
     }
     
     
@@ -260,7 +268,7 @@ int main(int argc, char** argv){
 //     robot->sense();
 //     model->syncFrom(*robot);
     
-    Eigen::VectorXd q, dq;
+    Eigen::VectorXd  dq;
     model->getJointPosition(q);
     
     model->initLog(logger, 10000);
@@ -301,7 +309,7 @@ int main(int argc, char** argv){
         model->log(logger, ros::Time::now().toSec());
         autostack->log(logger);
         
-        robot->setReferenceFrom(*model, XBot::Sync::Position);
+        robot->setReferenceFrom(*model, XBot::Sync::Position, XBot::Sync::Velocity);
         robot->move();
      
         std::cout << loop_rate.cycleTime().toSec() << std::endl;

@@ -278,10 +278,10 @@ int main(int argc, char** argv){
             Eigen::Affine3d T;
             _model->getPose(_left_arm_cartesian->getDistalLink(), _left_arm_cartesian->getBaseLink(), T);
             Eigen::MatrixXd I; I.setZero(6,6);
-            I.block(0,0,3,3) = T.linear().transpose();
-            I.block(3,3,3,3) = T.linear().transpose();
+            I.block(0,0,3,3) = T.linear();
+            I.block(3,3,3,3) = T.linear();
             
-            Eigen::Vector6d local_twist = I*ref_twist;
+            Eigen::Vector6d local_twist = I*ref_twist*3;
             
             _left_arm_cartesian->setReference(T.matrix(), local_twist*dt);
         }
@@ -291,10 +291,10 @@ int main(int argc, char** argv){
             Eigen::Affine3d T;
             _model->getPose(_right_arm_cartesian->getDistalLink(), _right_arm_cartesian->getBaseLink(), T);
             Eigen::MatrixXd I; I.setZero(6,6);
-            I.block(0,0,3,3) = T.linear().transpose();
-            I.block(3,3,3,3) = T.linear().transpose();
+            I.block(0,0,3,3) = T.linear();
+            I.block(3,3,3,3) = T.linear();
             
-            Eigen::Vector6d local_twist = I*ref_twist;
+            Eigen::Vector6d local_twist = I*ref_twist*3;
             
             _right_arm_cartesian->setReference(T.matrix(), local_twist*dt);
         }
@@ -362,7 +362,8 @@ void joy_callback(const sensor_msgs::Joy::ConstPtr& joy,
     int roll = 0;
     int pitch = 1;
     
-    int ee_selector = -1;
+    int ee_selector_plus = 6;
+    int ee_selector_min = 7;
 
     ref_twist[0] = v_max * joy->axes[fwd_bck];
     ref_twist[1] = v_max * joy->axes[l_r];
@@ -372,6 +373,7 @@ void joy_callback(const sensor_msgs::Joy::ConstPtr& joy,
     ref_twist[4] = thetadot_max * joy->axes[pitch];
     ref_twist[5] = thetadot_max * joy->axes[yaw];
     
-    ee_id = (ee_id + joy->buttons[ee_selector]) % ee_name_list.size();
+    ee_id = (ee_id + joy->buttons[ee_selector_plus]) % ee_name_list.size();
+    ee_id = (ee_id - joy->buttons[ee_selector_min]) % ee_name_list.size();
     
 }
