@@ -40,7 +40,18 @@ find_package(catkin REQUIRED COMPONENTS robot_state_publisher tf_conversions ros
 find_package(OpenSoT REQUIRED)
 find_package(XBotInterface REQUIRED)
 find_package(Boost REQUIRED COMPONENTS program_options filesystem)
+find_package(SDL QUIET)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+include(MacroYCMInstallLibrary)
+
+catkin_package(
+#  INCLUDE_DIRS include
+ LIBRARIES keyboard
+ CATKIN_DEPENDS robot_state_publisher 
+                roscpp 
+ DEPENDS ${Boost_LIBRARIES}
+)
 
 # message generation
 # add_message_files(
@@ -63,20 +74,40 @@ find_package(Boost REQUIRED COMPONENTS program_options filesystem)
 # )
 
 # include
-include_directories(include ${catkin_INCLUDE_DIRS} ${OpenSoT_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS} ${OpenSoT_INCLUDE_DIRS} ${SDL_INCLUDE_DIR})
 
 add_executable(keyboard_control src/keyboard_control.cpp)
-# add_executable(joy_control src/joy_control.cpp)
-add_executable(demo_joy_control src/demo_joy_control.cpp)
-
 target_link_libraries(keyboard_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES} ${Boost_LIBRARIES})
-# target_link_libraries(joy_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES})
+
+add_executable(demo_joy_control src/demo_joy_control.cpp)
 target_link_libraries(demo_joy_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(centauro_wheeled_locomotion src/centauro_wheeled_locomotion.cpp)
+target_link_libraries(centauro_wheeled_locomotion ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES})
+
+
+if(${SDL_FOUND})
+add_library(keyboard src/keyboard.cpp)
+target_link_libraries(keyboard ${SDL_LIBRARY})
+add_executable(keyboard_to_joy src/keyboard_to_joy.cpp)
+target_link_libraries(keyboard_to_joy ${catkin_LIBRARIES} keyboard)
+
+endif()
+
+ycm_library_install(keyboard 1 0 0)
+
+INSTALL(TARGETS keyboard_to_joy
+        EXPORT keyboard_to_joy
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 INSTALL(TARGETS keyboard_control
         EXPORT keyboard_control
-        RUNTIME DESTINATION bin)
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 INSTALL(TARGETS demo_joy_control
         EXPORT demo_joy_control
-        RUNTIME DESTINATION bin)
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+        
+INSTALL(TARGETS centauro_wheeled_locomotion
+        EXPORT centauro_wheeled_locomotion
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
