@@ -157,7 +157,7 @@ int main(int argc, char** argv){
     }
     
     postural_task = boost::make_shared<PosturalTask>(qhome);
-    postural_task->setLambda(0.1);
+    postural_task->setLambda(0.0);
 
     com_task = boost::make_shared<ComTask>(qhome, *model);
     com_task->setLambda(0.1);
@@ -223,16 +223,16 @@ int main(int argc, char** argv){
                     ) 
                     
                     
-                    / postural_task
+//                     / postural_task
                     
-                 )  << joint_pos_lims << joint_vel_lims
-                    << slippage_constraint;
+                 )  << joint_pos_lims << joint_vel_lims;
                  
+                                    
     autostack->update(qhome);
     autostack->log(logger);
 
     try{
-        solver.reset( new OpenSoT::solvers::QPOases_sot(autostack->getStack(), autostack->getBounds(), 1) );
+        solver.reset( new OpenSoT::solvers::QPOases_sot(autostack->getStack(), autostack->getBounds(), slippage_constraint, 1) );
     }
     catch(...){
        return -1;
@@ -310,6 +310,7 @@ int main(int argc, char** argv){
         pelvis_cartesian_task->setReference(waist_pose_ref.matrix(), world_I_cart*vref*ts);
         
         autostack->update(q);
+        slippage_constraint->update(q);
         
         if(!solver->solve(dq)){
             std::cerr << "Porcozio" << std::endl;
