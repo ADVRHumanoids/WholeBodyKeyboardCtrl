@@ -133,7 +133,7 @@ int main(int argc, char** argv){
                                                                      )
                                  );
         
-        icr_tasks[i]->setLambda(.01);
+        icr_tasks[i]->setLambda(.025);
         
         feet_cartesian_tasks.push_back( boost::make_shared<CartesianTask>("CARTESIAN_" + std::to_string(i),
                                                                            qhome,
@@ -192,35 +192,41 @@ int main(int argc, char** argv){
     joint_pos_lims = boost::make_shared<JointLimits>(qhome, qmax, qmin);
     
     joint_vel_lims = boost::make_shared<JointVelocityLimits>(qdotmax/5, ts*2);
+    
+    auto slippage_constraint = boost::make_shared<OpenSoT::constraints::TaskToConstraint>(rolling_pos_tasks[0] + 
+                                                                                    rolling_pos_tasks[1] + 
+                                                                                    rolling_pos_tasks[2] + 
+                                                                                    rolling_pos_tasks[3], 
+                                                                                    -Eigen::VectorXd::Ones(8)*0.00001,
+                                                                                    Eigen::VectorXd::Ones(8)*0.00001
+                                                                                    );
 
-    autostack = (   
-                    ( rolling_or_tasks[0] +
+    autostack = (   ( rolling_or_tasks[0] +
                         rolling_or_tasks[1] + 
                         rolling_or_tasks[2] +
                         rolling_or_tasks[3]
                     ) 
-                    / ( icr_tasks[0] + 
+                    
+                    / (  icr_tasks[0] + 
                         icr_tasks[1] + 
                         icr_tasks[2] + 
                         icr_tasks[3] 
                         
                     ) 
+                    
                     / ( pelvis_cartesian_task + left_arm_cartesian + right_arm_cartesian) 
-                    / ( rolling_pos_tasks[0] + 
+                    
+                    / ( rolling_pos_tasks[0] +
                         rolling_pos_tasks[1] + 
-                        rolling_pos_tasks[2] + 
-                        rolling_pos_tasks[3] ) 
+                        rolling_pos_tasks[2] +
+                        rolling_pos_tasks[3]
+                    ) 
                     
-//                     / postural_task
                     
-                 )  << joint_pos_lims << joint_vel_lims;
-//                     << boost::make_shared<OpenSoT::constraints::TaskToConstraint>(rolling_pos_tasks[0] + 
-//                                                                                     rolling_pos_tasks[1] + 
-//                                                                                     rolling_pos_tasks[2] + 
-//                                                                                     rolling_pos_tasks[3], 
-//                                                                                     -Eigen::VectorXd::Ones(12)*0.00001,
-//                                                                                     Eigen::VectorXd::Ones(12)*0.00001
-//                                                                                     );
+                    / postural_task
+                    
+                 )  << joint_pos_lims << joint_vel_lims
+                    << slippage_constraint;
                  
     autostack->update(qhome);
     autostack->log(logger);
@@ -265,8 +271,6 @@ int main(int argc, char** argv){
     /* TF broadcaster for publishing floating base tf */
     tf::TransformBroadcaster tf_broadcaster;
     
-//     robot->sense();
-//     model->syncFrom(*robot);
     
     Eigen::VectorXd  dq;
     model->getJointPosition(q);
@@ -290,8 +294,20 @@ int main(int argc, char** argv){
         for(int i : {0, 1, 2, 3}){
             icr_tasks[i]->setReference(0, cart_vref, Eigen::Vector2d(0.40, 0.27));
         }
+
+        Eigen::Matrix3d world_R_waist;
+        model->getOrientation("pelvis", world_R_waist);
+    
+        /* Compute world_R_cart from waist */
+        double theta = std::atan2(world_R_waist(1,0), world_R_waist(0,0));
+        Eigen::Matrix3d world_R_cart;
+        world_R_cart = Eigen::AngleAxisd(theta, Eigen::Vector3d::UnitZ());
+        Eigen::MatrixXd world_I_cart;
+        world_I_cart.setZero(6, 6);
+        world_I_cart << world_R_cart, Eigen::Matrix3d::Zero(),
+                        Eigen::Matrix3d::Zero(), world_R_cart;
         
-        pelvis_cartesian_task->setReference(waist_pose_ref.matrix(), vref*ts);
+        pelvis_cartesian_task->setReference(waist_pose_ref.matrix(), world_I_cart*vref*ts);
         
         autostack->update(q);
         
@@ -312,7 +328,7 @@ int main(int argc, char** argv){
         robot->setReferenceFrom(*model, XBot::Sync::Position, XBot::Sync::Velocity);
         robot->move();
      
-        std::cout << loop_rate.cycleTime().toSec() << std::endl;
+        std::cout << loop_rate.cycleTime().toSec()*1e6 << std::endl;
         
         /* Publish floating base pose to TF */
         Eigen::Affine3d w_T_pelvis;
