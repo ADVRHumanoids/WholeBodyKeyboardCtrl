@@ -35,8 +35,8 @@ void callback(geometry_msgs::Twist::ConstPtr msg, Eigen::Vector6d& vref){
 
 void joy_callback(sensor_msgs::Joy::ConstPtr msg, Eigen::Vector6d& vref){
     
-    double v_max = 0.1;
-    double thetadot_max = 0.1;
+    double v_max = 0.15;
+    double thetadot_max = 1.0;
     
     int fwd_bck = 7;
     int l_r = 6;
