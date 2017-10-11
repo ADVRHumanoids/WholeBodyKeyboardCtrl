@@ -313,6 +313,9 @@ int main(int argc, char** argv)
             if(code == KEY_TAB){
                 joy_msg.buttons[7] = 1.0;
             }
+            if(code == KEY_l){
+                joy_msg.buttons[5] = 1.0;
+            }
         }
     }
     

@@ -33,12 +33,15 @@ typedef OpenSoT::tasks::velocity::Postural PosturalTask;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
-const std::vector<std::string> ee_name_list = {"COM", "LEFT_ARM", "RIGHT_ARM", "LEFT_FRONT_FOOT"};
+const std::vector<std::string> ee_name_list = {"COM", "LEFT_ARM", "RIGHT_ARM", "LEFT_FRONT_FOOT", "RIGHT_FRONT_FOOT", "RIGHT_HIND_FOOT", "LEFT_HIND_FOOT"};
 
 void joy_callback(const sensor_msgs::Joy::ConstPtr& joy, 
                   Eigen::Vector6d& ref_twist, 
-                  int& ee_id
+                  int& ee_id,
+                  bool& base_frame_is_world
                   );
+
+bool is_foot(const std::string& ee_name);
 
 
 int main(int argc, char** argv){
@@ -53,7 +56,7 @@ int main(int argc, char** argv){
         desc.add_options()
             ("visual,V","Visual mode does not send references to the robot. \
                          An internal robot state publisher provides TF for visualization in rviz")
-            ("config,C", "Path to config file")
+            ("config,C", po::value<std::string>(), "Path to config file")
         ;
 
         
@@ -85,10 +88,12 @@ int main(int argc, char** argv){
     Eigen::Vector6d ref_twist;
     ref_twist.setZero();
     int ee_id = 0;
+    bool base_frame_is_world = true;
 
     auto joy_sub_callback = std::bind(joy_callback, std::placeholders::_1, 
                                              std::ref(ref_twist),
-                                             std::ref(ee_id)
+                                             std::ref(ee_id),
+                                             std::ref(base_frame_is_world)
                                             );
     ros::Subscriber joystick_feedback = nh.subscribe<sensor_msgs::Joy>("/joy", 1, joy_sub_callback);
     
@@ -167,7 +172,7 @@ int main(int argc, char** argv){
                                                                             )
                                        );
         
-        _feet_cartesian_tasks[i]->setLambda(0.1);
+        _feet_cartesian_tasks[i]->setLambda(0.0);
         
         std::list<uint> position_idx = {0, 1, 2}, orientation_idx = {3, 4, 5};
         
@@ -215,6 +220,21 @@ int main(int argc, char** argv){
     _joint_pos_lims = boost::make_shared<JointLimits>(_q, _qmax, _qmin);
     
     _joint_vel_lims = boost::make_shared<JointVelocityLimits>(_qdotmax, 0.01);
+    
+    std::map<std::string, CartesianTask::Ptr> _tasks_map;
+    std::map<std::string, ContactTask::Ptr> _contact_map;
+    
+    _tasks_map["RIGHT_ARM"] = _right_arm_cartesian;
+    _tasks_map["LEFT_ARM"] = _left_arm_cartesian;
+    _tasks_map["LEFT_FRONT_FOOT"] = _feet_cartesian_tasks[0];
+    _tasks_map["RIGHT_FRONT_FOOT"] = _feet_cartesian_tasks[1];
+    _tasks_map["RIGHT_HIND_FOOT"] = _feet_cartesian_tasks[2];
+    _tasks_map["LEFT_HIND_FOOT"] = _feet_cartesian_tasks[3];
+    
+    _contact_map["LEFT_FRONT_FOOT"] = _contact_tasks[0];
+    _contact_map["RIGHT_FRONT_FOOT"] = _contact_tasks[1];
+    _contact_map["RIGHT_HIND_FOOT"] = _contact_tasks[2];
+    _contact_map["LEFT_HIND_FOOT"] = _contact_tasks[3];
 
     
     
@@ -231,9 +251,13 @@ int main(int argc, char** argv){
     _autostack->getStack();
 
     _solver.reset( new OpenSoT::solvers::QPOases_sot(_autostack->getStack(), _autostack->getBounds(), 1e9) );
+    
+    int contact_stack_id = 0;
+    int foot_pos_stack_id = 3;
+    int foot_or_stack_id = 4;
 
-    _solver->setActiveStack(3, false);
-    _solver->setActiveStack(4, false);
+    _solver->setActiveStack(foot_pos_stack_id, false);
+    _solver->setActiveStack(foot_or_stack_id,  false);
     
     
     /* TF broadcaster for publishing floating base tf */
@@ -261,42 +285,55 @@ int main(int argc, char** argv){
 
         if(ee_name_list[ee_id] == "COM"){
             
+            _solver->setActiveStack(foot_pos_stack_id, false);
+            _solver->setActiveStack(foot_or_stack_id, false);
+            for(auto c : _contact_tasks) c->setActive(true);
+            
             Eigen::Affine3d T;
             _model->getPose(_pelvis_cartesian_task->getDistalLink(), T);
             Eigen::MatrixXd I; I.setZero(6,6);
             I.block(0,0,3,3) = T.linear().transpose();
             I.block(3,3,3,3) = T.linear().transpose();
             
-            Eigen::Vector6d local_twist = I*ref_twist;
+            Eigen::Vector6d local_twist = ref_twist;
+            
+            if(!base_frame_is_world){
+                local_twist = I*local_twist;
+            }
             
             _com_task->setReference(Eigen::Vector3d::Zero(), local_twist.head<3>()*dt);
             _pelvis_cartesian_task->setReference(T.matrix(), local_twist*dt);
         }
-        
-        if(ee_name_list[ee_id] == "LEFT_ARM"){
+        else{
+            
+            if(is_foot(ee_name_list[ee_id])){
+                _solver->setActiveStack(foot_pos_stack_id, true);
+                _solver->setActiveStack(foot_or_stack_id, true);
+                for(auto c : _contact_tasks) c->setActive(true);
+                _contact_map.at(ee_name_list[ee_id])->setActive(false);
+            }
+            else{
+                _solver->setActiveStack(foot_pos_stack_id, false);
+                _solver->setActiveStack(foot_or_stack_id, false);
+                for(auto c : _contact_tasks) c->setActive(true);
+            }
+            
+            CartesianTask::Ptr current_task = _tasks_map.at(ee_name_list[ee_id]);
             
             Eigen::Affine3d T;
-            _model->getPose(_left_arm_cartesian->getDistalLink(), _left_arm_cartesian->getBaseLink(), T);
+            _model->getPose(current_task->getDistalLink(), current_task->getBaseLink(), T);
             Eigen::MatrixXd I; I.setZero(6,6);
             I.block(0,0,3,3) = T.linear();
             I.block(3,3,3,3) = T.linear();
             
-            Eigen::Vector6d local_twist = I*ref_twist*3;
+            Eigen::Vector6d local_twist = ref_twist*3;
             
-            _left_arm_cartesian->setReference(T.matrix(), local_twist*dt);
-        }
-        
-        if(ee_name_list[ee_id] == "RIGHT_ARM"){
+            if(!base_frame_is_world){
+                local_twist = I*local_twist;
+            }
             
-            Eigen::Affine3d T;
-            _model->getPose(_right_arm_cartesian->getDistalLink(), _right_arm_cartesian->getBaseLink(), T);
-            Eigen::MatrixXd I; I.setZero(6,6);
-            I.block(0,0,3,3) = T.linear();
-            I.block(3,3,3,3) = T.linear();
+            current_task->setReference(T.matrix(), local_twist*dt);
             
-            Eigen::Vector6d local_twist = I*ref_twist*3;
-            
-            _right_arm_cartesian->setReference(T.matrix(), local_twist*dt);
         }
         
         
@@ -317,15 +354,18 @@ int main(int argc, char** argv){
        
 
        /* Publish TF */
-//        _model->getJointPosition(_joint_name_map);
-//         std::map<std::string, double> _joint_name_std_map(_joint_name_map.begin(), _joint_name_map.end());
-// 
-//         rspub.publishTransforms(_joint_name_std_map, ros::Time::now(), "");
-//         rspub.publishFixedTransforms("");
+       if(visual_mode){
+            _model->getJointPosition(_joint_name_map);
+            std::map<std::string, double> _joint_name_std_map(_joint_name_map.begin(), _joint_name_map.end());
 
-        /* Send reference to robot */
-        _robot->setReferenceFrom(*_model, XBot::Sync::Position);
-        _robot->move();
+            rspub.publishTransforms(_joint_name_std_map, ros::Time::now(), "");
+            rspub.publishFixedTransforms("");
+       }
+       else {
+            /* Send reference to robot */
+            _robot->setReferenceFrom(*_model, XBot::Sync::Position);
+            _robot->move();
+       }
         
        
        /* Publish floating base pose to TF */
@@ -345,10 +385,32 @@ int main(int argc, char** argv){
     
 }
 
+bool is_foot(const string& ee_name)
+{
+    if(ee_name == "LEFT_FRONT_FOOT"){
+        return true;
+    }
+    
+    if(ee_name == "RIGHT_FRONT_FOOT"){
+        return true;
+    }
+    
+    if(ee_name == "LEFT_HIND_FOOT"){
+        return true;
+    }
+    
+    if(ee_name == "RIGHT_HIND_FOOT"){
+        return true;
+    }
+    
+    return false;
+}
+
 
 void joy_callback(const sensor_msgs::Joy::ConstPtr& joy, 
                   Eigen::Vector6d& ref_twist, 
-                  int& ee_id
+                  int& ee_id,
+                  bool& base_frame_is_world
                   )
 {
     
@@ -362,8 +424,9 @@ void joy_callback(const sensor_msgs::Joy::ConstPtr& joy,
     int roll = 0;
     int pitch = 1;
     
-    int ee_selector_plus = 6;
-    int ee_selector_min = 7;
+    int ee_selector_plus = 7;
+    
+    int base_link_selector = 5;
 
     ref_twist[0] = v_max * joy->axes[fwd_bck];
     ref_twist[1] = v_max * joy->axes[l_r];
@@ -373,7 +436,25 @@ void joy_callback(const sensor_msgs::Joy::ConstPtr& joy,
     ref_twist[4] = thetadot_max * joy->axes[pitch];
     ref_twist[5] = thetadot_max * joy->axes[yaw];
     
+    int old_ee_id = ee_id;
+    
     ee_id = (ee_id + joy->buttons[ee_selector_plus]) % ee_name_list.size();
-    ee_id = (ee_id - joy->buttons[ee_selector_min]) % ee_name_list.size();
+    
+    if(ee_id != old_ee_id){
+        std::cout << "Controlling " << ee_name_list[ee_id] << std::endl;
+    }
+    
+    if(joy->buttons[base_link_selector] == 1){
+        base_frame_is_world = !base_frame_is_world;
+        
+        if(base_frame_is_world){
+            std::cout << "Controlling w.r.t. world frame" << std::endl;
+        }
+        else{
+            std::cout << "Controlling w.r.t. local frame" << std::endl;
+        }
+        
+    }
+    
     
 }
