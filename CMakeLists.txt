@@ -36,7 +36,7 @@ else()
 endif()
 
 # find required packages
-find_package(catkin REQUIRED COMPONENTS robot_state_publisher tf_conversions roscpp std_msgs sensor_msgs std_srvs geometry_msgs message_generation eigen_conversions)
+find_package(catkin REQUIRED COMPONENTS actionlib_msgs robot_state_publisher tf_conversions roscpp std_msgs sensor_msgs std_srvs geometry_msgs message_generation eigen_conversions)
 find_package(OpenSoT REQUIRED)
 find_package(XBotInterface REQUIRED)
 find_package(Boost REQUIRED COMPONENTS program_options filesystem)
@@ -54,9 +54,14 @@ add_message_files(
   Key.msg
 )
 
+add_action_files(
+  DIRECTORY action
+  FILES LegMovement.action
+)
+
 generate_messages(
   DEPENDENCIES
-  std_msgs
+  std_msgs actionlib_msgs
 )
 
 catkin_package(
@@ -64,6 +69,7 @@ catkin_package(
  LIBRARIES 
  CATKIN_DEPENDS robot_state_publisher 
                 roscpp 
+                actionlib_msgs
  DEPENDS ${Boost_LIBRARIES}
 )
 
@@ -99,6 +105,8 @@ target_link_libraries(demo_joy_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} 
 add_executable(centauro_wheeled_locomotion src/centauro_wheeled_locomotion.cpp)
 target_link_libraries(centauro_wheeled_locomotion ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES})
 
+add_executable(wholebody_action_server src/wholebody_action_server.cpp)
+target_link_libraries(wholebody_action_server ${Boost_LIBRARIES} ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES})
 
 if(${SDL_FOUND})
 
@@ -130,4 +138,8 @@ INSTALL(TARGETS demo_joy_control
         
 INSTALL(TARGETS centauro_wheeled_locomotion
         EXPORT centauro_wheeled_locomotion
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+
+INSTALL(TARGETS wholebody_action_server
+        EXPORT wholebody_action_server
         RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
