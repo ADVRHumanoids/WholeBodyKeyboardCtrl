@@ -13,6 +13,7 @@ namespace fs = boost::filesystem;
 int main(int argc, char **argv){
     
     ros::init(argc, argv, "wholebody_action_node");
+    ros::NodeHandle nh;
     
     /* Command line parsing */
     
@@ -60,6 +61,9 @@ int main(int argc, char **argv){
         model->getRobotState("home", _qhome);
         model->setJointPosition(_qhome);
         model->update();
+        std::string _urdf_param_name = "/xbotcore/" + model->getUrdf().getName() + "/robot_description";
+        nh.setParam(_urdf_param_name, model->getUrdfString());
+    
     }
     
     
@@ -69,9 +73,10 @@ int main(int argc, char **argv){
 
     
     std::vector<std::string> feet_links = {"foot_fl", "foot_fr", "foot_hr", "foot_hl"};
+    std::vector<std::string> wheels_links = {"wheel_1", "wheel_2", "wheel_4", "wheel_3"};
     
     auto model_mtx = std::make_shared<std::mutex>();
-    centauro::LegMovementAction act(model, model_mtx, feet_links);
+    centauro::LegMovementAction act(model, model_mtx, feet_links, wheels_links);
     
     ros::Rate loop_rate(100);
     

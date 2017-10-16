@@ -45,6 +45,8 @@
 #include <boost/functional.hpp>
 
 
+#define WHEEL_RADIUS 0.075
+
 namespace centauro {
     
     namespace VelocityTask = OpenSoT::tasks::velocity;
@@ -56,7 +58,8 @@ namespace centauro {
         
         LegMovementAction(XBot::ModelInterface::Ptr model,
                           std::shared_ptr<std::mutex> model_mtx,
-                          std::vector<std::string> feet_links);
+                          std::vector<std::string> feet_links,
+                          std::vector<std::string> wheels_links);
         
     private:
         
@@ -65,6 +68,8 @@ namespace centauro {
         void execute_cb(const wholebody_keyboard_ctrl::LegMovementGoalConstPtr& goal);
         
         bool check_tol(double tol);
+        
+        XBot::MatLogger::Ptr _logger;
         
         ros::NodeHandle _nh;
         
@@ -78,7 +83,7 @@ namespace centauro {
         XBot::ModelInterface::Ptr _model;
         std::shared_ptr<std::mutex> _model_mtx;
         
-        std::vector<std::string> _feet_links;
+        std::vector<std::string> _feet_links, _wheels_links;
         int _num_feet;
         
         Eigen::VectorXd _q, _qmin, _qmax, _qdotmax, _dq;
@@ -87,8 +92,8 @@ namespace centauro {
         std::vector<VelocityTask::Cartesian::Ptr> _feet_waist_cartesian_tasks;
         VelocityTask::Cartesian::Ptr _left_arm_cartesian, _right_arm_cartesian;
         
-        std::vector<VelocityTask::PureRolling::Ptr> rolling_tasks;
-        std::vector<VelocityTask::RigidRotation::Ptr> icr_tasks;
+        std::vector<OpenSoT::SubTask::Ptr> _rolling_tasks;
+        std::vector<VelocityTask::RigidRotation::Ptr> _icr_tasks;
         
         VelocityConstraint::JointLimits::Ptr _joint_pos_lims;
         VelocityConstraint::VelocityLimits::Ptr _joint_vel_lims;
@@ -103,20 +108,24 @@ namespace centauro {
 
 centauro::LegMovementAction::LegMovementAction(XBot::ModelInterface::Ptr model, 
                                                std::shared_ptr<std::mutex> model_mtx,
-                                               std::vector< std::string > feet_links):
+                                               std::vector< std::string > feet_links,
+                                               std::vector<std::string> wheels_links):
     _model(model),
     _feet_links(feet_links),
+    _wheels_links(wheels_links),
     _num_feet(feet_links.size()),
     _loop_rate(100),
     _goal_pos(feet_links.size(), Eigen::Affine3d::Identity()),
     _wheel_enabled(feet_links.size(), false),
-    _model_mtx(model_mtx)
-    
+    _model_mtx(model_mtx),
+    _logger(XBot::MatLogger::getLogger("/tmp/LegMovementAction"))
 {
     
     _model->getJointPosition(_q);
     _model->getJointLimits(_qmin, _qmax);
     _model->getVelocityLimits(_qdotmax);
+    
+    _qdotmax.head(6) << 0, 0, 0, 0, 0, 0;
     
     _dq = _q*0;
     
@@ -145,12 +154,17 @@ centauro::LegMovementAction::LegMovementAction(XBot::ModelInterface::Ptr model,
         
         _feet_world_cartesian_tasks[i]->setLambda(0.05);
         
-        std::list<uint> position_idx = {0, 1, 2}, orientation_idx = {3, 4};
+        std::list<uint> position_idx = {0, 1, 2}, orientation_idx = {3, 4, 5};
+        std::list<uint> position_xy_idx = {0, 1};
         
         feet_waist_pos_tasks.push_back( boost::make_shared<OpenSoT::SubTask>(_feet_waist_cartesian_tasks[i], position_idx) );
         feet_world_orientation_tasks.push_back( boost::make_shared<OpenSoT::SubTask>(_feet_world_cartesian_tasks[i], orientation_idx) );
 
         _feet_waist_cartesian_tasks[i]->setWeight(Eigen::MatrixXd::Identity(6,6));
+        
+        auto rolling_task = boost::make_shared<VelocityTask::PureRolling>(_wheels_links[i], WHEEL_RADIUS, *_model);
+        
+        _rolling_tasks.push_back( boost::make_shared<OpenSoT::SubTask>(rolling_task, position_xy_idx) );
 
     }
     
@@ -172,6 +186,12 @@ centauro::LegMovementAction::LegMovementAction(XBot::ModelInterface::Ptr model,
                                                             );
     _right_arm_cartesian->setLambda(.05);
     
+    /* Rolling aggregate */
+    
+    auto rolling_tasks_aggregated = _rolling_tasks[0] + _rolling_tasks[1] + _rolling_tasks[2] + _rolling_tasks[3];
+    auto world_feet_orientation_aggregated = feet_world_orientation_tasks[0] + feet_world_orientation_tasks[1] + feet_world_orientation_tasks[2] + feet_world_orientation_tasks[3];
+    auto waist_feet_position_aggregated = feet_waist_pos_tasks[0] + feet_waist_pos_tasks[1] + feet_waist_pos_tasks[2] + feet_waist_pos_tasks[3];
+    
     /* Joint limits */
     
     _joint_pos_lims = boost::make_shared<VelocityConstraint::JointLimits>(_q, _qmax, _qmin);
@@ -180,16 +200,20 @@ centauro::LegMovementAction::LegMovementAction(XBot::ModelInterface::Ptr model,
     
     /* Create autostack and solver */
     
-    _autostack = (  ( feet_world_orientation_tasks[0] + feet_world_orientation_tasks[1] + feet_world_orientation_tasks[2] + feet_world_orientation_tasks[3] ) /
-                    ( feet_waist_pos_tasks[0] + feet_waist_pos_tasks[1] + feet_waist_pos_tasks[2] + feet_waist_pos_tasks[3] ) /
-                    ( _left_arm_cartesian + _right_arm_cartesian ) 
-                 )  << _joint_pos_lims << _joint_vel_lims;
+    _autostack = (  
+                    ( waist_feet_position_aggregated  ) /
+                    ( world_feet_orientation_aggregated + rolling_tasks_aggregated ) /
+                    ( _left_arm_cartesian + _right_arm_cartesian  ) 
+                  )  << _joint_pos_lims << _joint_vel_lims;
                  
     _autostack->update(_q);
     
     _autostack->getStack();
     
-    _solver.reset( new OpenSoT::solvers::QPOases_sot(_autostack->getStack(), _autostack->getBounds(), 1e9) );
+    _solver.reset( new OpenSoT::solvers::QPOases_sot(_autostack->getStack(), _autostack->getBounds(), 1e2) );
+    
+    /* Init model log */
+    _model->initLog(_logger, 1e5);
     
     /* Open action server */
     _action_server = std::make_shared<ActionServer>(_nh, 
@@ -225,6 +249,10 @@ void centauro::LegMovementAction::execute_cb(const wholebody_keyboard_ctrl::LegM
     _wheel_enabled[2] = goal->wheel_rotation_enabled_br;
     _wheel_enabled[3] = goal->wheel_rotation_enabled_bl;
     
+    for(int i = 0; i < _num_feet; i++){
+//         _rolling_tasks[i]->setActive(_wheel_enabled[i]);
+    }
+    
     double TIMEOUT_TIME = 5.0;
     
     bool success = false;
@@ -240,11 +268,13 @@ void centauro::LegMovementAction::execute_cb(const wholebody_keyboard_ctrl::LegM
         /* Update cartesians */
         for(int i = 0; i < _num_feet; i++){
             _feet_waist_cartesian_tasks[i]->setReference(_goal_pos[i].matrix());
+            _feet_world_cartesian_tasks[i]->setReference(_goal_pos[i].matrix());
         }
         
-        {
+        { // model is shared between threads and needs to be accessed in a critical section
             std::lock_guard<std::mutex>(*_model_mtx);
             _autostack->update(_q);
+            _autostack->log(_logger);
         }
         
         if(!_solver->solve(_dq)){
@@ -254,13 +284,12 @@ void centauro::LegMovementAction::execute_cb(const wholebody_keyboard_ctrl::LegM
         
         _q += _dq;
         
-        std::cout << _q.transpose().format(Eigen::IOFormat(1)) << std::endl;
-        
         {
             std::lock_guard<std::mutex>(*_model_mtx);
             _model->setJointPosition(_q);
-            _model->setJointVelocity(_dq/_loop_rate);
+            _model->setJointVelocity(_dq*_loop_rate);
             _model->update();
+            _model->log(_logger, ros::Time::now().toSec());
         }
         
         success = check_tol(0.001);
@@ -280,13 +309,15 @@ bool centauro::LegMovementAction::check_tol(double tol)
 {
     double err = 0;
     
+    double dq_norm = _dq.array().abs().maxCoeff();
+    
     for(VelocityTask::Cartesian::Ptr task : _feet_waist_cartesian_tasks){
         err += task->getError().head<3>().norm();
     }
     
     err /= std::sqrt(3 * _num_feet);
     
-    return err <= tol;
+    return err <= tol && dq_norm <= 0.0001;
 }
 
 
