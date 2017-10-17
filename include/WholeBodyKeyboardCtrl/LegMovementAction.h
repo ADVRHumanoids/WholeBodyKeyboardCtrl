@@ -141,7 +141,7 @@ centauro::LegMovementAction::LegMovementAction(XBot::ModelInterface::Ptr model,
                                                                             )
                                        );
         
-        _feet_waist_cartesian_tasks[i]->setLambda(0.05);
+        _feet_waist_cartesian_tasks[i]->setLambda(0.01);
         
         _feet_world_cartesian_tasks.push_back( boost::make_shared<VelocityTask::Cartesian>("CARTESIAN_" + std::to_string(i),
                                                                            _q,
@@ -152,7 +152,7 @@ centauro::LegMovementAction::LegMovementAction(XBot::ModelInterface::Ptr model,
                                        );
         
         
-        _feet_world_cartesian_tasks[i]->setLambda(0.05);
+        _feet_world_cartesian_tasks[i]->setLambda(0.01);
         
         std::list<uint> position_idx = {0, 1, 2}, orientation_idx = {3, 4, 5};
         std::list<uint> position_xy_idx = {0, 1};
@@ -210,7 +210,7 @@ centauro::LegMovementAction::LegMovementAction(XBot::ModelInterface::Ptr model,
     
     _autostack->getStack();
     
-    _solver.reset( new OpenSoT::solvers::QPOases_sot(_autostack->getStack(), _autostack->getBounds(), 1e2) );
+    _solver.reset( new OpenSoT::solvers::QPOases_sot(_autostack->getStack(), _autostack->getBounds(), 1e6) );
     
     /* Init model log */
     _model->initLog(_logger, 1e5);
@@ -253,7 +253,7 @@ void centauro::LegMovementAction::execute_cb(const wholebody_keyboard_ctrl::LegM
 //         _rolling_tasks[i]->setActive(_wheel_enabled[i]);
     }
     
-    double TIMEOUT_TIME = 5.0;
+    double TIMEOUT_TIME = 10.0;
     
     bool success = false;
     
