@@ -54,6 +54,7 @@ int main(int argc, char **argv){
     auto model = XBot::ModelInterface::getModel(path_to_cfg);
     
     if(!visual_mode){
+        robot->sense();
         model->syncFrom(*robot);
     }
     else{
