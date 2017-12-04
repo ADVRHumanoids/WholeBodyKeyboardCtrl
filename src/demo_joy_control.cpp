@@ -33,6 +33,8 @@ typedef OpenSoT::tasks::velocity::Postural PosturalTask;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
+using XBot::Logger;
+
 const std::vector<std::string> ee_name_list = {"COM", "LEFT_ARM", "RIGHT_ARM", "LEFT_FRONT_FOOT", "RIGHT_FRONT_FOOT", "RIGHT_HIND_FOOT", "LEFT_HIND_FOOT"};
 
 void joy_callback(const sensor_msgs::Joy::ConstPtr& joy, 
@@ -72,7 +74,11 @@ int main(int argc, char** argv){
             path_to_cfg = fs::absolute(vm["config"].as<std::string>()).string();
         }
         else{
-            std::cout << desc << std::endl;
+            path_to_cfg = XBot::Utils::getXBotConfig();
+            if(path_to_cfg == ""){
+                std::cout << desc << std::endl;
+                return 1;
+            }
         }
         
         if (vm.count("visual")) {
@@ -262,13 +268,7 @@ int main(int argc, char** argv){
     
     /* TF broadcaster for publishing floating base tf */
     tf::TransformBroadcaster tf_broadcaster;
-    
-    std::cout << "Usage: \n";
-    std::cout << "\t W-A-S-D: com position on the XY plane \n";
-    std::cout << "\t T-G: com height (up-down) \n";
-    std::cout << "\t R-F: waist roll (pos-neg) \n";
-    std::cout << "\t P-ò: waist pitch (pos-neg) \n";
-    std::cout << "\t Y-H: waist yaw (pos-neg) \n";
+   
     
     ros::Rate loop_rate(100);
     double dt = loop_rate.expectedCycleTime().toSec();
@@ -276,6 +276,8 @@ int main(int argc, char** argv){
     XBot::JointNameMap _joint_name_map;
     
 
+    Logger::success(Logger::Severity::HIGH, "Started looping.. \n");
+    
     while(ros::ok()){
         
         /* Update reference from joypad */
@@ -342,7 +344,7 @@ int main(int argc, char** argv){
         
         /* Solve QP */
         if(!_solver->solve(_dq)){
-            std::cout << "SOLVER ERROR" << std::endl;
+            Logger::error("SOLVER ERROR \n");
             continue;
         }
         
@@ -441,17 +443,17 @@ void joy_callback(const sensor_msgs::Joy::ConstPtr& joy,
     ee_id = (ee_id + joy->buttons[ee_selector_plus]) % ee_name_list.size();
     
     if(ee_id != old_ee_id){
-        std::cout << "Controlling " << ee_name_list[ee_id] << std::endl;
+        Logger::info(Logger::Severity::HIGH) << "Controlling " << ee_name_list[ee_id] << Logger::endl();
     }
     
     if(joy->buttons[base_link_selector] == 1){
         base_frame_is_world = !base_frame_is_world;
         
         if(base_frame_is_world){
-            std::cout << "Controlling w.r.t. world frame" << std::endl;
+            Logger::info(Logger::Severity::HIGH) << "Controlling w.r.t. world frame" << Logger::endl();
         }
         else{
-            std::cout << "Controlling w.r.t. local frame" << std::endl;
+            Logger::info(Logger::Severity::HIGH) << "Controlling w.r.t. local frame" << Logger::endl();
         }
         
     }
