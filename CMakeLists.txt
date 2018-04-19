@@ -100,7 +100,7 @@ add_executable(keyboard_control src/keyboard_control.cpp)
 target_link_libraries(keyboard_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES} ${Boost_LIBRARIES})
 
 add_executable(demo_joy_control src/demo_joy_control.cpp)
-target_link_libraries(demo_joy_control ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(demo_joy_control yaml-cpp ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES} ${Boost_LIBRARIES})
 
 add_executable(centauro_wheeled_locomotion src/centauro_wheeled_locomotion.cpp)
 target_link_libraries(centauro_wheeled_locomotion ${catkin_LIBRARIES} ${OpenSoT_LIBRARIES} ${XBotInterface_LIBRARIES})
