@@ -44,6 +44,8 @@
 #include <boost/function.hpp>
 #include <boost/functional.hpp>
 
+#include <mutex>
+
 
 #define WHEEL_RADIUS 0.075
 
@@ -99,7 +101,7 @@ namespace centauro {
         VelocityConstraint::VelocityLimits::Ptr _joint_vel_lims;
         
         OpenSoT::AutoStack::Ptr _autostack;
-        OpenSoT::solvers::QPOases_sot::Ptr _solver;
+        OpenSoT::solvers::iHQP::Ptr _solver;
         
     };
 
@@ -210,7 +212,7 @@ centauro::LegMovementAction::LegMovementAction(XBot::ModelInterface::Ptr model,
     
     _autostack->getStack();
     
-    _solver.reset( new OpenSoT::solvers::QPOases_sot(_autostack->getStack(), _autostack->getBounds(), 1e6) );
+    _solver.reset( new OpenSoT::solvers::iHQP(_autostack->getStack(), _autostack->getBounds(), 1e6) );
     
     /* Init model log */
     _model->initLog(_logger, 1e5);
