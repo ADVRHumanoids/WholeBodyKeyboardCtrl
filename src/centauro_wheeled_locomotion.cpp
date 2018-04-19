@@ -112,7 +112,7 @@ int main(int argc, char** argv){
     OpenSoT::constraints::velocity::VelocityLimits::Ptr joint_vel_lims;
 
     OpenSoT::AutoStack::Ptr autostack;
-    OpenSoT::solvers::QPOases_sot::Ptr solver;
+    OpenSoT::solvers::iHQP::Ptr solver;
     
     
     
@@ -232,7 +232,7 @@ int main(int argc, char** argv){
     autostack->log(logger);
 
     try{
-        solver.reset( new OpenSoT::solvers::QPOases_sot(autostack->getStack(), autostack->getBounds(), slippage_constraint, 1) );
+        solver.reset( new OpenSoT::solvers::iHQP(autostack->getStack(), autostack->getBounds(), slippage_constraint, 1) );
     }
     catch(...){
        return -1;

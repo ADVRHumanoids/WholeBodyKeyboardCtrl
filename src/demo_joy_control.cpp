@@ -149,7 +149,7 @@ int main(int argc, char** argv){
     OpenSoT::constraints::velocity::VelocityLimits::Ptr _joint_vel_lims;
 
     OpenSoT::AutoStack::Ptr _autostack;
-    OpenSoT::solvers::QPOases_sot::Ptr _solver;
+    OpenSoT::solvers::iHQP::Ptr _solver;
 
     Eigen::VectorXd _q, _qmin, _qmax, _qdotmax, _dq;
     
@@ -256,7 +256,7 @@ int main(int argc, char** argv){
     
     _autostack->getStack();
 
-    _solver.reset( new OpenSoT::solvers::QPOases_sot(_autostack->getStack(), _autostack->getBounds(), 1e9) );
+    _solver.reset( new OpenSoT::solvers::iHQP(_autostack->getStack(), _autostack->getBounds(), 1e9) );
     
     int contact_stack_id = 0;
     int foot_pos_stack_id = 3;
